@@ -1,0 +1,44 @@
+- name: k8s encrypt secrets
+  hosts: localhost
+  gather_facts: false
+  tasks:
+    - name: load secret manifest yml file
+      include_vars:
+        file: ../../secret.yml
+        name: manifest_secret
+    
+#    - name: display input data
+#      debug:
+#        var: manifest_secret
+
+    - name: fetching hashicorp vault secrets
+      set_fact:
+        secrets_value: "{{ secrets_value | default({}) | combine ({ item.key : lookup('community.hashi_vault.hashi_vault', item.value, auth_method=hashi_vault.auth_method, token=hashi_vault.token, url=hashi_vault.url) | b64encode }) }}"
+      with_dict: "{{manifest_secret.data}}"
+    
+#    - debug:
+#        var: secrets_value
+
+    - name: combining secrets values
+      set_fact:
+        manifest_secret: "{{ manifest_secret | combine({'data': secrets_value})}}"
+    
+#    - debug:
+#        var: manifest_secret
+
+    - tempfile:
+        state: file
+        suffix: temp
+      register: tmp_file
+
+    - copy:
+        dest: "{{ tmp_file.path }}"
+        content: "{{ manifest_secret }}"
+
+    - name: creating encrypted secret
+      shell: "kubeseal --scope cluster-wide --controller-name=sealed-secrets --controller-namespace=sealed-secrets --format=yaml < {{tmp_file.path}} > ../../secret-encrypted.yml"
+    
+    - file:
+        path: "{{ tmp_file.path }}"
+        state: absent
+      when: tmp_file.path is defined

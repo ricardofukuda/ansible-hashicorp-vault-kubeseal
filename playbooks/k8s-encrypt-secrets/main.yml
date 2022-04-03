@@ -13,7 +13,7 @@
 
     - name: fetching hashicorp vault secrets
       set_fact:
-        secrets_value: "{{ secrets_value | default({}) | combine ({ item.key : lookup('community.hashi_vault.hashi_vault', item.value, auth_method=hashi_vault.auth_method, token=hashi_vault.token, url=hashi_vault.url) | b64encode }) }}"
+        secrets_value: "{{ secrets_value | default({}) | combine ({ item.key : lookup('community.hashi_vault.hashi_vault', item.value) | b64encode }) }}"
       with_dict: "{{manifest_secret.data}}"
     
 #    - debug:

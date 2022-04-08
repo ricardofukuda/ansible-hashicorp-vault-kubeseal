@@ -1,0 +1,46 @@
+- name: k8s encrypt secrets
+  hosts: localhost
+  gather_facts: false
+  tasks:
+    - name: load secret manifest yml file
+      include_vars:
+        file: ../../secret-simple.yml
+        name: manifest_secret
+    
+#    - name: display input data
+#      debug:
+#        var: manifest_secret
+
+    - name: fetching hashicorp vault secrets
+      set_fact:
+        secrets_value_vault: "{{ secrets_value_vault | default({}) | combine ({ item.key : lookup('community.hashi_vault.hashi_vault', item.value) | b64encode }) }}"
+      with_dict: "{{manifest_secret.vault}}"
+    
+    - name: encoding unsafe secrets
+      set_fact:
+        secrets_value_unsafe: "{{ secrets_value_unsafe | default({}) | combine ({ item.key : item.value | b64encode }) }}"
+      with_dict: "{{manifest_secret.unsafe}}"
+    
+#    - debug:
+#        var: secrets_value
+    
+#    - debug:
+#        var: manifest_secret
+
+    - tempfile:
+        state: file
+        suffix: temp
+      register: tmp_file
+
+    - name: template a file
+      ansible.builtin.template:
+        src: "secret.yml.j2"
+        dest: "{{tmp_file.path}}"
+
+    - name: creating encrypted secret
+      shell: "kubeseal --controller-name=sealed-secrets --controller-namespace=sealed-secrets --format=yaml < {{tmp_file.path}} > ../../secret-encrypted-simple.yml"
+    
+    - file:
+        path: "{{ tmp_file.path }}"
+        state: absent
+      when: tmp_file.path is defined
